@@ -1,0 +1,62 @@
+# Docker Compose para executar toda a aplicação
+version: '3.8'
+
+services:
+  # Base de dados SQL Server
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: member-management-db
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=MemberManagement@2024
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - member-management-network
+
+  # Web API C#
+  api:
+    build:
+      context: ./MemberManagementAPI
+      dockerfile: Dockerfile
+    container_name: member-management-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=MemberManagementDB;User Id=sa;Password=MemberManagement@2024;TrustServerCertificate=true;
+      - Jwt__Key=sua-chave-secreta-muito-segura-aqui-com-pelo-menos-32-caracteres-para-producao
+      - Jwt__Issuer=MemberManagementAPI
+      - Jwt__Audience=MemberManagementApp
+      - Jwt__ExpireMinutes=60
+    ports:
+      - "5000:80"
+    depends_on:
+      - sqlserver
+    networks:
+      - member-management-network
+    restart: unless-stopped
+
+  # Frontend Next.js
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: member-management-frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:5000/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks:
+      - member-management-network
+    restart: unless-stopped
+
+volumes:
+  sqlserver_data:
+
+networks:
+  member-management-network:
+    driver: bridge
